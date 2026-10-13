@@ -23,12 +23,12 @@ def generate_tables(excel_path, out_dir, settings, table_names=None, log=None):
             warnings = []
             try:
                 xml_text = generate_stage_xml(table, stage, settings, warnings=warnings)
+                out_path = os.path.join(out_dir, table.mapping_name_for(stage) + ".XML")
+                with open(out_path, "wb") as stream:
+                    stream.write(xml_text.encode("utf-8"))
             except Exception as exc:
                 log("[ОШИБКА] {} ({}): {}".format(table.table, stage, exc))
                 continue
-            out_path = os.path.join(out_dir, table.mapping_name_for(stage) + ".XML")
-            with open(out_path, "wb") as stream:
-                stream.write(xml_text.encode("utf-8"))
             log("Создан: {}".format(out_path))
             for warning in warnings:
                 log("[ВНИМАНИЕ] {} ({}): {}".format(table.table, stage, warning))
