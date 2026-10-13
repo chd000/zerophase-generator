@@ -47,6 +47,13 @@ GATHER_STATS_SQL = (
 
 TGT_SOURCE_FILTER = "DWH$CHANGE_TYPE IN ('I', 'U', 'D')"
 
+_FIELD_RENAMES = {"DATE": "DTE", "TYPE": "TPE", "NUMBER": "NMBR"}
+
+
+def _xml_field_name(name: str) -> str:
+    upper = name.strip().upper()
+    return _FIELD_RENAMES.get(upper, upper)
+
 
 def _strip_quotes(text: str) -> str:
     text = text.strip()
@@ -170,7 +177,7 @@ def _build_fields(table: SourceTable) -> List[dict]:
     for attribute in table.attributes:
         base, precision, scale = parse_data_type(attribute.data_type)
         spec = _field_spec(base, precision, scale)
-        spec["name"] = attribute.name
+        spec["name"] = _xml_field_name(attribute.name)
         spec["description"] = ""
         fields.append(spec)
     offset = 0
@@ -239,8 +246,8 @@ def _sql_query(table: SourceTable, warnings: List[str]) -> str:
 
 
 def _sql_query_dlt(table: SourceTable, settings: GeneratorSettings, warnings: List[str]) -> str:
-    business = [a.name for a in table.attributes]
-    pk = _pk_columns(table, warnings)
+    business = [_xml_field_name(a.name) for a in table.attributes]
+    pk = [_xml_field_name(name) for name in _pk_columns(table, warnings)]
     if not pk:
         raise ValueError("Для DLT-маппинга необходимы PK-атрибуты")
     columns = [
@@ -276,7 +283,7 @@ def _target_instance_pre_sql(table: SourceTable, settings: GeneratorSettings) ->
     pk = _pk_columns(table, [])
     if not pk:
         raise ValueError("Для TGT-маппинга необходимы PK-атрибуты")
-    keys = pk[0]
+    keys = _xml_field_name(pk[0])
     delete_sql = (
         "DELETE {owner}.{target} WHERE ({keys}) IN (SELECT {keys} FROM {owner}.{dlt} "
         "WHERE DWH$CHANGE_TYPE IN ('I','U','D'))\\; COMMIT\\; end\\;"
