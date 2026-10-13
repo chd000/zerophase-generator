@@ -24,9 +24,11 @@ _LOGICAL_TYPE_ALIASES = {
 _TYPE_SUBSTITUTIONS = {
     "string": ("varchar2", 1000, 0),
     "long": ("number", None, None),
+    "bool": ("char", 1, 0),
+    "boolean": ("char", 1, 0),
 }
 
-FIELD_LENGTH = {"varchar2": 0, "number": 24, "date": 19, "timestamp": 19}
+FIELD_LENGTH = {"varchar2": 0, "char": 0, "number": 24, "date": 19, "timestamp": 19}
 
 TECH_FIELD_SPECS = [
     ("DWH$CHANGE_DATE", "date", None, None),
@@ -117,6 +119,9 @@ def _field_spec(datatype, precision, scale):
     if datatype == "varchar2":
         size = precision if precision is not None else 1000
         return {"datatype": "varchar2", "phys": size, "prec": size, "scale": 0}
+    if datatype == "char":
+        size = precision if precision is not None else 1
+        return {"datatype": "char", "phys": size, "prec": size, "scale": 0}
     if datatype == "number":
         prec = precision if precision is not None else 15
         return {
@@ -197,7 +202,7 @@ def _build_fields(table: SourceTable) -> List[dict]:
 
 
 def _transform_type(spec):
-    if spec["datatype"] == "varchar2":
+    if spec["datatype"] in ("varchar2", "char"):
         return "string", spec["prec"], 0
     if spec["datatype"] == "number":
         if spec.get("explicit"):
