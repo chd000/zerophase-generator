@@ -17,10 +17,13 @@ _LOGICAL_TYPE_ALIASES = {
     "timestamp-millis": "timestamp",
     "local-timestamp-micros": "timestamp",
     "local-timestamp-millis": "timestamp",
+    "decimal": "number",
+    "numeric": "number",
 }
 
 _TYPE_SUBSTITUTIONS = {
     "string": ("varchar2", 1000, 0),
+    "long": ("number", None, None),
 }
 
 FIELD_LENGTH = {"varchar2": 0, "number": 24, "date": 19, "timestamp": 19}
@@ -50,7 +53,7 @@ def _strip_quotes(text: str) -> str:
     return text
 
 
-def _json_type_value(text: str):
+def _json_type_info(text: str):
     try:
         data = json.loads(text)
     except ValueError:
@@ -58,33 +61,55 @@ def _json_type_value(text: str):
     if isinstance(data, dict):
         value = data.get("logicalType") or data.get("type")
         if isinstance(value, str):
-            return value
+            precision = data.get("precision")
+            scale = data.get("scale")
+            return (
+                value,
+                precision if isinstance(precision, int) else None,
+                scale if isinstance(scale, int) else None,
+            )
+        return None, None, None
     match = re.search(r'"logicalType"\s*:\s*"([^"]+)"', text)
     if match:
-        return match.group(1)
-    match = re.search(r'"type"\s*:\s*"([^"]+)"', text)
-    if match:
-        return match.group(1)
-    return None
+        value = match.group(1)
+    else:
+        match = re.search(r'"type"\s*:\s*"([^"]+)"', text)
+        value = match.group(1) if match else None
+    if not value:
+        return None, None, None
+    precision_match = re.search(r'"precision"\s*:\s*(\d+)', text)
+    scale_match = re.search(r'"scale"\s*:\s*(\d+)', text)
+    return (
+        value,
+        int(precision_match.group(1)) if precision_match else None,
+        int(scale_match.group(1)) if scale_match else None,
+    )
 
 
 def parse_data_type(raw):
     text = _strip_quotes(str(raw or ""))
+    json_precision = None
+    json_scale = None
     if text.startswith("{"):
-        logical = _json_type_value(text)
+        logical, json_precision, json_scale = _json_type_info(text)
         if not logical:
             raise ValueError("Не удалось разобрать тип данных: {!r}".format(raw))
         logical = logical.strip()
         text = _LOGICAL_TYPE_ALIASES.get(logical.lower(), logical)
     key = text.strip().lower()
     if key in _TYPE_SUBSTITUTIONS:
-        return _TYPE_SUBSTITUTIONS[key]
-    match = _TYPE_RE.match(text)
-    if not match:
-        raise ValueError("Не удалось разобрать тип данных: {!r}".format(raw))
-    base = re.sub(r"\s+", " ", match.group(1)).lower()
-    precision = int(match.group(2)) if match.group(2) else None
-    scale = int(match.group(3)) if match.group(3) else None
+        base, precision, scale = _TYPE_SUBSTITUTIONS[key]
+    else:
+        match = _TYPE_RE.match(text.strip())
+        if not match:
+            raise ValueError("Не удалось разобрать тип данных: {!r}".format(raw))
+        base = re.sub(r"\s+", " ", match.group(1)).lower()
+        precision = int(match.group(2)) if match.group(2) else None
+        scale = int(match.group(3)) if match.group(3) else None
+    if json_precision is not None:
+        precision = json_precision
+    if json_scale is not None:
+        scale = json_scale
     return base, precision, scale
 
 
@@ -99,6 +124,7 @@ def _field_spec(datatype, precision, scale):
             "phys": prec,
             "prec": prec,
             "scale": scale if scale is not None else 0,
+            "explicit": precision is not None,
         }
     if datatype == "date":
         return {"datatype": "date", "phys": 19, "prec": 19, "scale": 0}
@@ -174,6 +200,8 @@ def _transform_type(spec):
     if spec["datatype"] == "varchar2":
         return "string", spec["prec"], 0
     if spec["datatype"] == "number":
+        if spec.get("explicit"):
+            return "decimal", spec["prec"], spec["scale"]
         return "double", 15, 0
     return "date/time", 29, 9
 
