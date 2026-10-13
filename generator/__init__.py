@@ -1,7 +1,8 @@
+from .ddl_generator import generate_ddl_for_table, generate_table_ddl
 from .loader import load_source_tables
 from .models import SourceAttribute, SourceTable
+from .settings import GeneratorSettings
 from .xml_generator import (
-    GeneratorSettings,
     generate_dlt_xml,
     generate_src_xml,
     generate_stage_xml,
@@ -13,9 +14,11 @@ __all__ = [
     "GeneratorSettings",
     "SourceAttribute",
     "SourceTable",
+    "generate_ddl_for_table",
     "generate_dlt_xml",
     "generate_src_xml",
     "generate_stage_xml",
+    "generate_table_ddl",
     "generate_tgt_xml",
     "load_source_tables",
     "parse_data_type",

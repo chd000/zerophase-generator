@@ -2,10 +2,10 @@ import datetime
 import json
 import re
 import uuid
-from dataclasses import dataclass
 from typing import List, Optional
 
 from .models import SourceTable
+from .settings import GeneratorSettings
 
 _TYPE_RE = re.compile(
     r"^([A-Za-z0-9_ ]+?)\s*(?:\(\s*(\d+)\s*(?:,\s*(\d+))?\s*(?:char|byte)?\s*\))?$",
@@ -158,22 +158,6 @@ def _attr_list(pairs) -> str:
 
 def _attr_plain(pairs) -> str:
     return " ".join('{}="{}"'.format(name, _escape_attr(value)) for name, value in pairs)
-
-
-@dataclass
-class GeneratorSettings:
-    folder_name: str = "MY_FOLDER_NAME"
-    folder_owner: str = "Administrator"
-    dbdname: str = "OFSDEV"
-    owner: str = "STAGE"
-    repository_name: str = "REPOSITORY"
-    repository_version: str = "189"
-    repository_version_full: str = "189.98"
-    codepage: str = "UTF-8"
-    repository_database_type: str = "PostgreSQL"
-    definition_database_type: str = "Oracle"
-    folder_uuid: Optional[str] = None
-    creation_date: Optional[str] = None
 
 
 def _build_fields(table: SourceTable) -> List[dict]:

@@ -4,7 +4,7 @@ import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from generator import GeneratorSettings, generate_stage_xml, load_source_tables
+from generator import GeneratorSettings, generate_ddl_for_table, generate_stage_xml, load_source_tables
 
 STAGES = ("SRC", "DLT", "TGT")
 
@@ -19,11 +19,15 @@ def generate_tables(excel_path, out_dir, settings, table_names=None, log=None):
     for table in tables:
         if table_names is not None and table.table not in table_names:
             continue
+        xml_dir = os.path.join(out_dir, table.schema or "UNKNOWN", "xml")
+        ddl_dir = os.path.join(out_dir, table.schema or "UNKNOWN", "ddl")
+        os.makedirs(xml_dir, exist_ok=True)
+        os.makedirs(ddl_dir, exist_ok=True)
         for stage in STAGES:
             warnings = []
             try:
                 xml_text = generate_stage_xml(table, stage, settings, warnings=warnings)
-                out_path = os.path.join(out_dir, table.mapping_name_for(stage) + ".XML")
+                out_path = os.path.join(xml_dir, table.mapping_name_for(stage) + ".XML")
                 with open(out_path, "wb") as stream:
                     stream.write(xml_text.encode("utf-8"))
             except Exception as exc:
@@ -33,6 +37,16 @@ def generate_tables(excel_path, out_dir, settings, table_names=None, log=None):
             for warning in warnings:
                 log("[ВНИМАНИЕ] {} ({}): {}".format(table.table, stage, warning))
             written.append(out_path)
+        for ddl_file_name, ddl_text in generate_ddl_for_table(table, settings).items():
+            try:
+                ddl_path = os.path.join(ddl_dir, ddl_file_name)
+                with open(ddl_path, "wb") as stream:
+                    stream.write(ddl_text.encode("utf-8"))
+            except Exception as exc:
+                log("[ОШИБКА] {} (DDL {}): {}".format(table.table, table_name, exc))
+                continue
+            log("Создан: {}".format(ddl_path))
+            written.append(ddl_path)
     return written
 
 
@@ -90,7 +104,7 @@ class App(tk.Tk):
         buttons = ttk.Frame(container)
         buttons.pack(fill=tk.X, pady=(8, 0))
         ttk.Button(buttons, text="Загрузить таблицы из Excel", command=self._load_tables).pack(side=tk.LEFT)
-        ttk.Button(buttons, text="Сгенерировать маппинги (SRC / DLT / TGT)", command=self._generate).pack(side=tk.LEFT, padx=8)
+        ttk.Button(buttons, text="Сгенерировать XML и DDL (SRC / DLT / TGT)", command=self._generate).pack(side=tk.LEFT, padx=8)
         self.log_text = tk.Text(container, height=9, state=tk.DISABLED)
         self.log_text.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
 
@@ -162,7 +176,7 @@ class App(tk.Tk):
         )
         written = generate_tables(excel, out, settings, table_names=self.checked, log=self.log)
         if written:
-            messagebox.showinfo("Готово", "Создано маппингов: {}".format(len(written)))
+            messagebox.showinfo("Готово", "Создано файлов: {}".format(len(written)))
         else:
             messagebox.showwarning("Ничего не создано", "См. журнал ниже.")
 
