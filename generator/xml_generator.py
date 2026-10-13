@@ -1,4 +1,5 @@
 import datetime
+import json
 import re
 import uuid
 from dataclasses import dataclass
@@ -10,6 +11,17 @@ _TYPE_RE = re.compile(
     r"^([A-Za-z0-9_ ]+?)\s*(?:\(\s*(\d+)\s*(?:,\s*(\d+))?\s*(?:char|byte)?\s*\))?$",
     re.IGNORECASE,
 )
+
+_LOGICAL_TYPE_ALIASES = {
+    "timestamp-micros": "timestamp",
+    "timestamp-millis": "timestamp",
+    "local-timestamp-micros": "timestamp",
+    "local-timestamp-millis": "timestamp",
+}
+
+_TYPE_SUBSTITUTIONS = {
+    "string": ("varchar2", 1000, 0),
+}
 
 FIELD_LENGTH = {"varchar2": 0, "number": 24, "date": 19, "timestamp": 19}
 
@@ -31,8 +43,42 @@ GATHER_STATS_SQL = (
 TGT_SOURCE_FILTER = "DWH$CHANGE_TYPE IN ('I', 'U', 'D')"
 
 
+def _strip_quotes(text: str) -> str:
+    text = text.strip()
+    while len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
+        text = text[1:-1].strip()
+    return text
+
+
+def _json_type_value(text: str):
+    try:
+        data = json.loads(text)
+    except ValueError:
+        data = None
+    if isinstance(data, dict):
+        value = data.get("logicalType") or data.get("type")
+        if isinstance(value, str):
+            return value
+    match = re.search(r'"logicalType"\s*:\s*"([^"]+)"', text)
+    if match:
+        return match.group(1)
+    match = re.search(r'"type"\s*:\s*"([^"]+)"', text)
+    if match:
+        return match.group(1)
+    return None
+
+
 def parse_data_type(raw):
-    text = (raw or "").strip()
+    text = _strip_quotes(str(raw or ""))
+    if text.startswith("{"):
+        logical = _json_type_value(text)
+        if not logical:
+            raise ValueError("Не удалось разобрать тип данных: {!r}".format(raw))
+        logical = logical.strip()
+        text = _LOGICAL_TYPE_ALIASES.get(logical.lower(), logical)
+    key = text.strip().lower()
+    if key in _TYPE_SUBSTITUTIONS:
+        return _TYPE_SUBSTITUTIONS[key]
     match = _TYPE_RE.match(text)
     if not match:
         raise ValueError("Не удалось разобрать тип данных: {!r}".format(raw))
