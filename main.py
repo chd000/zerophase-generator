@@ -1,7 +1,8 @@
 import argparse
 import os
-import shutil
+import stat
 import sys
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -20,6 +21,48 @@ def parse_process_ids(values):
     return parsed
 
 
+def _remove_tree(path):
+    if not os.path.isdir(path):
+        return True
+    try:
+        for root, dirs, files in os.walk(path, topdown=False):
+            os.chmod(root, os.stat(root).st_mode | stat.S_IWRITE)
+            for name in files:
+                target = os.path.join(root, name)
+                os.chmod(target, os.stat(target).st_mode | stat.S_IWRITE)
+                os.remove(target)
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        os.rmdir(path)
+        return True
+    except OSError:
+        return False
+
+
+def clean_schema_dirs(out_dir, targets, log):
+    cleaned = set()
+    for table in targets:
+        schema_dir = os.path.join(out_dir, table.schema or "UNKNOWN")
+        key = os.path.normcase(os.path.abspath(schema_dir))
+        if key in cleaned:
+            continue
+        cleaned.add(key)
+        for sub in ("xml", "ddl"):
+            path = os.path.join(schema_dir, sub)
+            if not os.path.isdir(path):
+                continue
+            removed = False
+            for _ in range(3):
+                if _remove_tree(path):
+                    removed = True
+                    break
+                time.sleep(0.4)
+            if removed:
+                log("Очищено: {}".format(path))
+            else:
+                log("[ОШИБКА] Не удалось очистить: {}".format(path))
+
+
 def generate_tables(excel_path, out_dir, settings, table_names=None, log=None,
                     generate_mappings=True, generate_ddl=True, generate_workflow=True,
                     generate_master=True, clean_output=False):
@@ -33,21 +76,7 @@ def generate_tables(excel_path, out_dir, settings, table_names=None, log=None,
         log("Ни одна таблица не выбрана для генерации.")
         return []
     if clean_output:
-        cleaned = set()
-        for table in targets:
-            schema_dir = os.path.join(out_dir, table.schema or "UNKNOWN")
-            if schema_dir in cleaned:
-                continue
-            cleaned.add(schema_dir)
-            for sub in ("xml", "ddl"):
-                path = os.path.join(schema_dir, sub)
-                if os.path.isdir(path):
-                    try:
-                        shutil.rmtree(path)
-                    except Exception as exc:
-                        log("[ОШИБКА] Не удалось очистить {}: {}".format(path, exc))
-                        continue
-                    log("Очищено: {}".format(path))
+        clean_schema_dirs(out_dir, targets, log)
     written = []
     for table in targets:
         xml_dir = os.path.join(out_dir, table.schema or "UNKNOWN", "xml")
@@ -139,7 +168,7 @@ class App(tk.Tk):
         self.mappings_var = tk.BooleanVar(value=True)
         self.ddl_var = tk.BooleanVar(value=True)
         self.workflow_var = tk.BooleanVar(value=True)
-        self.clean_var = tk.BooleanVar(value=False)
+        self.clean_var = tk.BooleanVar(value=True)
         container = ttk.Frame(self, padding=8)
         container.pack(fill=tk.BOTH, expand=True)
         files = ttk.LabelFrame(container, text="Файлы", padding=8)
@@ -180,7 +209,7 @@ class App(tk.Tk):
         ttk.Checkbutton(buttons, text="Маппинги (XML)", variable=self.mappings_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Checkbutton(buttons, text="DDL-скрипты", variable=self.ddl_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Checkbutton(buttons, text="Поток (workflow)", variable=self.workflow_var).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Checkbutton(buttons, text="Очищать каталоги вывода", variable=self.clean_var).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Checkbutton(buttons, text="Очищать папки схем перед генерацией", variable=self.clean_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(buttons, text="Сгенерировать", command=self._generate).pack(side=tk.LEFT, padx=8)
         self.log_text = tk.Text(container, height=9, state=tk.DISABLED)
         self.log_text.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
@@ -336,8 +365,12 @@ def main(argv=None):
     parser.add_argument("--no-ddl", action="store_true", help="не генерировать DDL-скрипты")
     parser.add_argument("--no-workflow", action="store_true", help="не генерировать поток (workflow)")
     parser.add_argument("--no-master", action="store_true", help="не генерировать управляющий поток")
-    parser.add_argument("--clean", action="store_true",
-                        help="очистить каталоги xml/ddl выбранных схем перед генерацией")
+    clean_group = parser.add_mutually_exclusive_group()
+    clean_group.add_argument("--clean", dest="clean", action="store_true",
+                             help="очистить каталоги xml/ddl выбранных схем перед генерацией (по умолчанию)")
+    clean_group.add_argument("--no-clean", dest="clean", action="store_false",
+                             help="не очищать каталоги схем перед генерацией")
+    parser.set_defaults(clean=True)
     args = parser.parse_args(argv)
     if not args.headless:
         App().mainloop()
