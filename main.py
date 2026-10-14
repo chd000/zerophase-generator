@@ -10,7 +10,7 @@ STAGES = ("SRC", "DLT", "TGT")
 
 
 def generate_tables(excel_path, out_dir, settings, table_names=None, log=None,
-                    generate_mappings=True, generate_workflow=True):
+                    generate_mappings=True, generate_ddl=True, generate_workflow=True):
     log = log or (lambda message: None)
     tables = load_source_tables(excel_path)
     if not tables:
@@ -22,8 +22,9 @@ def generate_tables(excel_path, out_dir, settings, table_names=None, log=None,
             continue
         xml_dir = os.path.join(out_dir, table.schema or "UNKNOWN", "xml")
         ddl_dir = os.path.join(out_dir, table.schema or "UNKNOWN", "ddl")
-        if generate_mappings:
+        if generate_mappings or generate_workflow:
             os.makedirs(xml_dir, exist_ok=True)
+        if generate_ddl:
             os.makedirs(ddl_dir, exist_ok=True)
         if generate_mappings:
             for stage in STAGES:
@@ -40,6 +41,7 @@ def generate_tables(excel_path, out_dir, settings, table_names=None, log=None,
                 for warning in warnings:
                     log("[ВНИМАНИЕ] {} ({}): {}".format(table.table, stage, warning))
                 written.append(out_path)
+        if generate_ddl:
             for ddl_file_name, ddl_text in generate_ddl_for_table(table, settings).items():
                 try:
                     ddl_path = os.path.join(ddl_dir, ddl_file_name)
@@ -79,6 +81,7 @@ class App(tk.Tk):
         self.tables = []
         self.checked = set()
         self.mappings_var = tk.BooleanVar(value=True)
+        self.ddl_var = tk.BooleanVar(value=True)
         self.workflow_var = tk.BooleanVar(value=True)
         container = ttk.Frame(self, padding=8)
         container.pack(fill=tk.BOTH, expand=True)
@@ -123,7 +126,8 @@ class App(tk.Tk):
         buttons = ttk.Frame(container)
         buttons.pack(fill=tk.X, pady=(8, 0))
         ttk.Button(buttons, text="Загрузить таблицы из Excel", command=self._load_tables).pack(side=tk.LEFT)
-        ttk.Checkbutton(buttons, text="Маппинги и DDL", variable=self.mappings_var).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Checkbutton(buttons, text="Маппинги (XML)", variable=self.mappings_var).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Checkbutton(buttons, text="DDL-скрипты", variable=self.ddl_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Checkbutton(buttons, text="Поток (workflow)", variable=self.workflow_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(buttons, text="Сгенерировать", command=self._generate).pack(side=tk.LEFT, padx=8)
         self.log_text = tk.Text(container, height=9, state=tk.DISABLED)
@@ -195,7 +199,7 @@ class App(tk.Tk):
             folder_name=self.folder_var.get().strip() or "MY_FOLDER_NAME",
             repository_name=self.repository_var.get().strip() or "REPOSITORY",
         )
-        if not self.mappings_var.get() and not self.workflow_var.get():
+        if not self.mappings_var.get() and not self.ddl_var.get() and not self.workflow_var.get():
             messagebox.showwarning("Ничего не выбрано", "Отметьте хотя бы один тип генерации.")
             return
         written = generate_tables(
@@ -205,6 +209,7 @@ class App(tk.Tk):
             table_names=self.checked,
             log=self.log,
             generate_mappings=self.mappings_var.get(),
+            generate_ddl=self.ddl_var.get(),
             generate_workflow=self.workflow_var.get(),
         )
         if written:
@@ -221,7 +226,8 @@ def main(argv=None):
     parser.add_argument("--folder", default="MY_FOLDER_NAME", help="имя папки PowerCenter")
     parser.add_argument("--repository", default="REPOSITORY", help="имя репозитория PowerCenter")
     parser.add_argument("--only", action="append", default=[], help="генерировать только указанную таблицу (можно повторять)")
-    parser.add_argument("--no-mappings", action="store_true", help="не генерировать маппинги и DDL")
+    parser.add_argument("--no-mappings", action="store_true", help="не генерировать маппинги (XML)")
+    parser.add_argument("--no-ddl", action="store_true", help="не генерировать DDL-скрипты")
     parser.add_argument("--no-workflow", action="store_true", help="не генерировать поток (workflow)")
     args = parser.parse_args(argv)
     if not args.headless:
@@ -240,6 +246,7 @@ def main(argv=None):
         table_names=set(args.only) or None,
         log=print,
         generate_mappings=not args.no_mappings,
+        generate_ddl=not args.no_ddl,
         generate_workflow=not args.no_workflow,
     )
     return 0 if written else 1
