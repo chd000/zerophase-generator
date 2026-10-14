@@ -131,11 +131,21 @@ def _field_spec(datatype, precision, scale):
         return {"datatype": "char", "phys": size, "prec": size, "scale": 0}
     if datatype == "number":
         prec = precision if precision is not None else 15
+        scale_value = scale if scale is not None else 0
+        if scale_value:
+            return {
+                "datatype": "number(p,s)",
+                "phys": prec,
+                "prec": prec,
+                "scale": scale_value,
+                "length": prec + 2,
+                "explicit": True,
+            }
         return {
             "datatype": "number",
             "phys": prec,
             "prec": prec,
-            "scale": scale if scale is not None else 0,
+            "scale": scale_value,
             "explicit": precision is not None,
         }
     if datatype == "date":
@@ -184,7 +194,8 @@ def _build_fields(table: SourceTable) -> List[dict]:
     physical_offset = 0
     for number, spec in enumerate(fields, 1):
         spec["field_number"] = number
-        spec["length"] = FIELD_LENGTH[spec["datatype"]]
+        if "length" not in spec:
+            spec["length"] = FIELD_LENGTH[spec["datatype"]]
         spec["offset"] = offset
         spec["physical_offset"] = physical_offset
         offset += spec["length"]
@@ -195,7 +206,7 @@ def _build_fields(table: SourceTable) -> List[dict]:
 def _transform_type(spec):
     if spec["datatype"] in ("varchar2", "char"):
         return "string", spec["prec"], 0
-    if spec["datatype"] == "number":
+    if spec["datatype"] in ("number", "number(p,s)"):
         if spec.get("explicit"):
             return "decimal", spec["prec"], spec["scale"]
         return "double", 15, 0

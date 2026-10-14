@@ -21,7 +21,7 @@ def _sql_type(spec) -> str:
         return "VARCHAR2({})".format(spec["prec"])
     if datatype == "char":
         return "CHAR({})".format(spec["prec"])
-    if datatype == "number":
+    if datatype in ("number", "number(p,s)"):
         if spec.get("explicit"):
             return "NUMBER ({}, {})".format(spec["prec"], spec["scale"])
         return "NUMBER"
