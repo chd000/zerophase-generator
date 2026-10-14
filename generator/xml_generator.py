@@ -55,6 +55,13 @@ def _xml_field_name(name: str) -> str:
     return _FIELD_RENAMES.get(upper, upper)
 
 
+def _sql_field_name(name: str) -> str:
+    upper = name.strip().upper()
+    if upper in _FIELD_RENAMES:
+        return '"{}"'.format(upper)
+    return name
+
+
 def _strip_quotes(text: str) -> str:
     text = text.strip()
     while len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
@@ -224,7 +231,7 @@ def _pk_columns(table: SourceTable, warnings: List[str]) -> List[str]:
 
 
 def _sql_query(table: SourceTable, warnings: List[str]) -> str:
-    business = [a.name for a in table.attributes]
+    business = [_sql_field_name(a.name) for a in table.attributes]
     outer = [
         "DWH$CHANGE_DATE",
         "DWH$CHANGE_TYPE",
@@ -235,7 +242,7 @@ def _sql_query(table: SourceTable, warnings: List[str]) -> str:
         "ODS$OP_TYPE",
     ] + business
     inner = ["ODS$OP_SEQ", "ODS$OP_CSN", "ODS$COMMIT_TS", "ODS$PROCESSED_DT", "ODS$OP_TYPE"] + business
-    partition = _pk_columns(table, warnings)
+    partition = [_sql_field_name(name) for name in _pk_columns(table, warnings)]
     lines = ["SELECT " + ",\r\n       ".join(outer)]
     lines.append("  FROM (SELECT ROW_NUMBER ()")
     lines.append("               OVER (")
