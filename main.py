@@ -72,7 +72,7 @@ def generate_tables(excel_path, out_dir, settings, table_names=None, log=None,
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Генератор маппингов PowerCenter (SRC / DLT / TGT)")
+        self.title("Генератор потоков PowerCenter")
         self.geometry("960x640")
         self.excel_var = tk.StringVar()
         self.out_var = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "Desktop"))
