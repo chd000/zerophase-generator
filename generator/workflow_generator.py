@@ -67,6 +67,7 @@ def generate_workflow_xml(
         "@@FOLDER_NAME@@": settings.folder_name,
         "@@FOLDER_OWNER@@": settings.folder_owner,
         "@@FOLDER_UUID@@": settings.folder_uuid or str(uuid.uuid4()),
+        "@@REPOSITORY@@": settings.repository_name,
     }
     text = WORKFLOW_TEMPLATE
     for token, value in values.items():

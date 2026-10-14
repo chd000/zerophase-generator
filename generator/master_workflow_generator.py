@@ -35,6 +35,7 @@ def generate_master_workflow_xml(
         "@@FOLDER_NAME@@": settings.folder_name,
         "@@FOLDER_OWNER@@": settings.folder_owner,
         "@@FOLDER_UUID@@": settings.folder_uuid or str(uuid.uuid4()),
+        "@@REPOSITORY@@": settings.repository_name,
         "@@DBDNAME@@": settings.dbdname,
         "@@OWNER@@": settings.owner,
         "@@WF_NAME@@": workflow_name,

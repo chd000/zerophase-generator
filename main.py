@@ -116,8 +116,6 @@ class App(tk.Tk):
         self.geometry("960x640")
         self.excel_var = tk.StringVar()
         self.out_var = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "Desktop"))
-        self.folder_var = tk.StringVar(value="MY_FOLDER_NAME")
-        self.repository_var = tk.StringVar(value="REPOSITORY")
         self.tables = []
         self.checked = set()
         self.process_ids = {}
@@ -135,12 +133,6 @@ class App(tk.Tk):
         ttk.Entry(files, textvariable=self.out_var).grid(row=1, column=1, sticky=tk.EW, padx=4)
         ttk.Button(files, text="Обзор…", command=self._choose_out).grid(row=1, column=2)
         files.columnconfigure(1, weight=1)
-        settings = ttk.LabelFrame(container, text="Настройки генерации", padding=8)
-        settings.pack(fill=tk.X, pady=(8, 0))
-        ttk.Label(settings, text="Folder:").grid(row=0, column=0, sticky=tk.W)
-        ttk.Entry(settings, textvariable=self.folder_var, width=26).grid(row=0, column=1, sticky=tk.W, padx=4)
-        ttk.Label(settings, text="Repository:").grid(row=0, column=2, sticky=tk.W, padx=(16, 0))
-        ttk.Entry(settings, textvariable=self.repository_var, width=26).grid(row=0, column=3, sticky=tk.W, padx=4)
         tables_frame = ttk.LabelFrame(container, text="Таблицы", padding=8)
         tables_frame.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
         columns = ("system", "db", "schema", "table", "inc", "src")
@@ -290,8 +282,6 @@ class App(tk.Tk):
             messagebox.showerror("Ошибка", "Каталог вывода не существует: {}".format(out))
             return
         settings = GeneratorSettings(
-            folder_name=self.folder_var.get().strip() or "MY_FOLDER_NAME",
-            repository_name=self.repository_var.get().strip() or "REPOSITORY",
             wk_process_id_map=self.process_ids or None,
         )
         if not self.mappings_var.get() and not self.ddl_var.get() and not self.workflow_var.get():
