@@ -17,3 +17,13 @@ class GeneratorSettings:
     folder_uuid: Optional[str] = None  # UUID папки; None — новый для каждого XML-файла
     creation_date: Optional[str] = None  # дата в заголовке (MM/DD/YYYY HH:MI:SS); None — текущая
     ddl_tablespace: str = "STAGE_DATA"  # TABLESPACE в DDL-скриптах
+    workflow_name: Optional[str] = None  # имя потока; None — wf_ODS_<схема>_<таблица>
+    workflow_log_name: Optional[str] = None  # базовое имя лога потока; None — как имя потока
+    audit_log_prefix: str = "ODS_CASTA"  # префикс лог-файлов сервисных сессий в worklet
+    stage_connection: str = "KIH_STAGE"  # подключение к стейджу (writer и reader DLT/TGT)
+    source_connection: str = "KIH_DTPL_ODS"  # подключение к БД источника (reader SRC)
+    integration_service: str = "IPC_KIH_PRE_IS"  # сервис интеграции (SERVERNAME потока)
+    domain_name: str = "Domain_rripcc-apc001lk"  # домен PowerCenter
+    wk_process_id_src: int = 1000008927  # $$wk_PROCESS_ID в worklet SRC (DEFINE_VAR)
+    wk_process_id_dlt: int = 1000008928  # $$wk_PROCESS_ID в worklet DLT (DEFINE_VAR)
+    wk_process_id_tgt: int = 1000008929  # $$wk_PROCESS_ID в worklet TGT (DEFINE_VAR)

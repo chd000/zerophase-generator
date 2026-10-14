@@ -4,12 +4,13 @@ import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from generator import GeneratorSettings, generate_ddl_for_table, generate_stage_xml, load_source_tables
+from generator import GeneratorSettings, generate_ddl_for_table, generate_stage_xml, generate_workflow_xml, load_source_tables
 
 STAGES = ("SRC", "DLT", "TGT")
 
 
-def generate_tables(excel_path, out_dir, settings, table_names=None, log=None):
+def generate_tables(excel_path, out_dir, settings, table_names=None, log=None,
+                    generate_mappings=True, generate_workflow=True):
     log = log or (lambda message: None)
     tables = load_source_tables(excel_path)
     if not tables:
@@ -21,32 +22,48 @@ def generate_tables(excel_path, out_dir, settings, table_names=None, log=None):
             continue
         xml_dir = os.path.join(out_dir, table.schema or "UNKNOWN", "xml")
         ddl_dir = os.path.join(out_dir, table.schema or "UNKNOWN", "ddl")
-        os.makedirs(xml_dir, exist_ok=True)
-        os.makedirs(ddl_dir, exist_ok=True)
-        for stage in STAGES:
+        if generate_mappings:
+            os.makedirs(xml_dir, exist_ok=True)
+            os.makedirs(ddl_dir, exist_ok=True)
+        if generate_mappings:
+            for stage in STAGES:
+                warnings = []
+                try:
+                    xml_text = generate_stage_xml(table, stage, settings, warnings=warnings)
+                    out_path = os.path.join(xml_dir, table.mapping_name_for(stage) + ".XML")
+                    with open(out_path, "wb") as stream:
+                        stream.write(xml_text.encode("utf-8"))
+                except Exception as exc:
+                    log("[ОШИБКА] {} ({}): {}".format(table.table, stage, exc))
+                    continue
+                log("Создан: {}".format(out_path))
+                for warning in warnings:
+                    log("[ВНИМАНИЕ] {} ({}): {}".format(table.table, stage, warning))
+                written.append(out_path)
+            for ddl_file_name, ddl_text in generate_ddl_for_table(table, settings).items():
+                try:
+                    ddl_path = os.path.join(ddl_dir, ddl_file_name)
+                    with open(ddl_path, "wb") as stream:
+                        stream.write(ddl_text.encode("utf-8"))
+                except Exception as exc:
+                    log("[ОШИБКА] {} (DDL {}): {}".format(table.table, ddl_file_name, exc))
+                    continue
+                log("Создан: {}".format(ddl_path))
+                written.append(ddl_path)
+        if generate_workflow:
             warnings = []
             try:
-                xml_text = generate_stage_xml(table, stage, settings, warnings=warnings)
-                out_path = os.path.join(xml_dir, table.mapping_name_for(stage) + ".XML")
-                with open(out_path, "wb") as stream:
-                    stream.write(xml_text.encode("utf-8"))
+                os.makedirs(xml_dir, exist_ok=True)
+                wf_text = generate_workflow_xml(table, settings, warnings=warnings)
+                wf_name = settings.workflow_name or "wf_ODS_{}_{}".format(table.schema, table.table)
+                wf_path = os.path.join(xml_dir, wf_name + ".XML")
+                with open(wf_path, "wb") as stream:
+                    stream.write(wf_text.encode("utf-8"))
             except Exception as exc:
-                log("[ОШИБКА] {} ({}): {}".format(table.table, stage, exc))
+                log("[ОШИБКА] {} (WORKFLOW): {}".format(table.table, exc))
                 continue
-            log("Создан: {}".format(out_path))
-            for warning in warnings:
-                log("[ВНИМАНИЕ] {} ({}): {}".format(table.table, stage, warning))
-            written.append(out_path)
-        for ddl_file_name, ddl_text in generate_ddl_for_table(table, settings).items():
-            try:
-                ddl_path = os.path.join(ddl_dir, ddl_file_name)
-                with open(ddl_path, "wb") as stream:
-                    stream.write(ddl_text.encode("utf-8"))
-            except Exception as exc:
-                log("[ОШИБКА] {} (DDL {}): {}".format(table.table, table_name, exc))
-                continue
-            log("Создан: {}".format(ddl_path))
-            written.append(ddl_path)
+            log("Создан: {}".format(wf_path))
+            written.append(wf_path)
     return written
 
 
@@ -61,6 +78,8 @@ class App(tk.Tk):
         self.repository_var = tk.StringVar(value="REPOSITORY")
         self.tables = []
         self.checked = set()
+        self.mappings_var = tk.BooleanVar(value=True)
+        self.workflow_var = tk.BooleanVar(value=True)
         container = ttk.Frame(self, padding=8)
         container.pack(fill=tk.BOTH, expand=True)
         files = ttk.LabelFrame(container, text="Файлы", padding=8)
@@ -104,7 +123,9 @@ class App(tk.Tk):
         buttons = ttk.Frame(container)
         buttons.pack(fill=tk.X, pady=(8, 0))
         ttk.Button(buttons, text="Загрузить таблицы из Excel", command=self._load_tables).pack(side=tk.LEFT)
-        ttk.Button(buttons, text="Сгенерировать XML и DDL (SRC / DLT / TGT)", command=self._generate).pack(side=tk.LEFT, padx=8)
+        ttk.Checkbutton(buttons, text="Маппинги и DDL", variable=self.mappings_var).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Checkbutton(buttons, text="Поток (workflow)", variable=self.workflow_var).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(buttons, text="Сгенерировать", command=self._generate).pack(side=tk.LEFT, padx=8)
         self.log_text = tk.Text(container, height=9, state=tk.DISABLED)
         self.log_text.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
 
@@ -174,7 +195,18 @@ class App(tk.Tk):
             folder_name=self.folder_var.get().strip() or "MY_FOLDER_NAME",
             repository_name=self.repository_var.get().strip() or "REPOSITORY",
         )
-        written = generate_tables(excel, out, settings, table_names=self.checked, log=self.log)
+        if not self.mappings_var.get() and not self.workflow_var.get():
+            messagebox.showwarning("Ничего не выбрано", "Отметьте хотя бы один тип генерации.")
+            return
+        written = generate_tables(
+            excel,
+            out,
+            settings,
+            table_names=self.checked,
+            log=self.log,
+            generate_mappings=self.mappings_var.get(),
+            generate_workflow=self.workflow_var.get(),
+        )
         if written:
             messagebox.showinfo("Готово", "Создано файлов: {}".format(len(written)))
         else:
@@ -189,6 +221,8 @@ def main(argv=None):
     parser.add_argument("--folder", default="MY_FOLDER_NAME", help="имя папки PowerCenter")
     parser.add_argument("--repository", default="REPOSITORY", help="имя репозитория PowerCenter")
     parser.add_argument("--only", action="append", default=[], help="генерировать только указанную таблицу (можно повторять)")
+    parser.add_argument("--no-mappings", action="store_true", help="не генерировать маппинги и DDL")
+    parser.add_argument("--no-workflow", action="store_true", help="не генерировать поток (workflow)")
     args = parser.parse_args(argv)
     if not args.headless:
         App().mainloop()
@@ -205,6 +239,8 @@ def main(argv=None):
         settings,
         table_names=set(args.only) or None,
         log=print,
+        generate_mappings=not args.no_mappings,
+        generate_workflow=not args.no_workflow,
     )
     return 0 if written else 1
 
