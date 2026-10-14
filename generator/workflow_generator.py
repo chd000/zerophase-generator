@@ -38,7 +38,8 @@ def generate_workflow_xml(
     for stage in ("TGT", "DLT", "SRC"):
         stage_warnings: List[str] = []
         stage_texts[stage] = generate_stage_xml(table, stage, settings, warnings=stage_warnings)
-    stem_body = (table.schema.strip() + "_" + table.table.strip()).upper()
+    base = table.base_name
+    stem_body = base[4:] if base.startswith("ODS_") else base
     stem = "ODS_" + stem_body
     workflow_name = settings.workflow_name or "wf_" + stem
     workflow_log_name = settings.workflow_log_name or ("wf_" + stem)

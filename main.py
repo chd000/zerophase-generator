@@ -70,7 +70,7 @@ def generate_tables(excel_path, out_dir, settings, table_names=None, log=None,
             try:
                 os.makedirs(xml_dir, exist_ok=True)
                 wf_text = generate_workflow_xml(table, settings, warnings=warnings)
-                wf_name = settings.workflow_name or "wf_ODS_{}_{}".format(table.schema, table.table)
+                wf_name = settings.workflow_name or "wf_" + table.base_name
                 wf_path = os.path.join(xml_dir, wf_name + ".XML")
                 with open(wf_path, "wb") as stream:
                     stream.write(wf_text.encode("utf-8"))

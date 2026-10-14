@@ -25,31 +25,23 @@ class SourceTable:
 
     @property
     def src_name(self) -> str:
-        base = self.inc_table.strip() or "ODS_{}_{}".format(self.schema.strip(), self.table.strip())
-        if base.upper().endswith("_INC"):
-            base = base[:-4] + "_SRC"
-        return base
+        return self.base_name + "_SRC"
 
     @property
     def mapping_name(self) -> str:
         return "MAP_" + self.src_name
 
     @property
+    def base_name(self) -> str:
+        return "ODS_{}_{}".format(self.schema.strip(), self.table.strip()).upper()
+
+    @property
     def dlt_name(self) -> str:
-        src = self.src_name
-        if src.upper().endswith("_SRC"):
-            return src[:-4] + "_DLT"
-        return src + "_DLT"
+        return self.base_name + "_DLT"
 
     @property
     def tgt_name(self) -> str:
-        base = self.tgt_table.strip()
-        if base:
-            return base
-        src = self.src_name
-        if src.upper().endswith("_SRC"):
-            return src[:-4] + "_TGT"
-        return src + "_TGT"
+        return self.base_name + "_TGT"
 
     def stage_table_name(self, stage: str) -> str:
         if stage == "SRC":
