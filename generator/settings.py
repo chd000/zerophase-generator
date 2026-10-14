@@ -33,3 +33,4 @@ class GeneratorSettings:
     master_connection: str = "IAS_to_GO_Stage"  # подключение к БД в сессиях управляющего потока
     pmcmd_user: str = "CABS_KIH"  # пользователь pmcmd при запуске рабочих потоков
     pmcmd_password: str = "CABS_KIH"  # пароль pmcmd
+    wk_process_id_map: Optional[dict] = None  # PROCESS_ID ворклетов по таблицам: {("<ТАБЛИЦА>", "SRC"|"DLT"|"TGT"): id}; нет ключа — заглушки выше

@@ -10,6 +10,15 @@ from generator import (GeneratorSettings, generate_ddl_for_table, generate_maste
 STAGES = ("SRC", "DLT", "TGT")
 
 
+def parse_process_ids(values):
+    parsed = {}
+    for key, text in values.items():
+        text = (text or "").strip()
+        if text.isdigit():
+            parsed[key] = int(text)
+    return parsed
+
+
 def generate_tables(excel_path, out_dir, settings, table_names=None, log=None,
                     generate_mappings=True, generate_ddl=True, generate_workflow=True,
                     generate_master=True):
@@ -111,10 +120,10 @@ class App(tk.Tk):
         self.repository_var = tk.StringVar(value="REPOSITORY")
         self.tables = []
         self.checked = set()
+        self.process_ids = {}
         self.mappings_var = tk.BooleanVar(value=True)
         self.ddl_var = tk.BooleanVar(value=True)
         self.workflow_var = tk.BooleanVar(value=True)
-        self.master_var = tk.BooleanVar(value=True)
         container = ttk.Frame(self, padding=8)
         container.pack(fill=tk.BOTH, expand=True)
         files = ttk.LabelFrame(container, text="Файлы", padding=8)
@@ -161,7 +170,6 @@ class App(tk.Tk):
         ttk.Checkbutton(buttons, text="Маппинги (XML)", variable=self.mappings_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Checkbutton(buttons, text="DDL-скрипты", variable=self.ddl_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Checkbutton(buttons, text="Поток (workflow)", variable=self.workflow_var).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Checkbutton(buttons, text="Управляющий поток", variable=self.master_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(buttons, text="Сгенерировать", command=self._generate).pack(side=tk.LEFT, padx=8)
         self.log_text = tk.Text(container, height=9, state=tk.DISABLED)
         self.log_text.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
@@ -194,6 +202,8 @@ class App(tk.Tk):
             messagebox.showerror("Ошибка чтения", str(exc))
             return
         self.checked = {t.table for t in self.tables}
+        known = {t.table.strip().upper() for t in self.tables}
+        self.process_ids = {k: v for k, v in self.process_ids.items() if k[0] in known}
         self.tree.delete(*self.tree.get_children())
         for t in self.tables:
             self.tree.insert(
@@ -204,6 +214,57 @@ class App(tk.Tk):
                 values=(t.system, t.db, t.schema, t.table, t.inc_table, t.src_name),
             )
         self.log("Загружено таблиц: {}".format(len(self.tables)))
+        self._ask_process_ids()
+
+    def _ask_process_ids(self):
+        dialog = tk.Toplevel(self)
+        dialog.title("Process ID ворклетов")
+        dialog.transient(self)
+        dialog.grab_set()
+        wrapper = ttk.Frame(dialog, padding=8)
+        wrapper.pack(fill=tk.BOTH, expand=True)
+        defaults = GeneratorSettings()
+        ttk.Label(wrapper, text=(
+            "Таблиц: {}. Для каждой таблицы задайте $$wk_PROCESS_ID её ворклетов (SRC, DLT, TGT).\n"
+            "Поля предзаполнены значениями по умолчанию (заглушка) — измените при необходимости."
+        ).format(len(self.tables))).grid(row=0, column=0, columnspan=4, sticky=tk.W, pady=(0, 6))
+        canvas = tk.Canvas(wrapper, highlightthickness=0)
+        vsb = ttk.Scrollbar(wrapper, orient=tk.VERTICAL, command=canvas.yview)
+        inner = ttk.Frame(canvas)
+        inner.bind("<Configure>", lambda event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.configure(yscrollcommand=vsb.set)
+        canvas.grid(row=1, column=0, sticky=tk.NSEW)
+        vsb.grid(row=1, column=1, sticky=tk.NS)
+        wrapper.rowconfigure(1, weight=1)
+        wrapper.columnconfigure(0, weight=1)
+        for col, title in enumerate(("Таблица (схема)", "SRC", "DLT", "TGT")):
+            ttk.Label(inner, text=title).grid(row=0, column=col, sticky=tk.W, padx=4, pady=(0, 4))
+        fields = {}
+        for row, table in enumerate(self.tables, start=1):
+            ttk.Label(inner, text="{} ({})".format(table.table, table.schema)).grid(
+                row=row, column=0, sticky=tk.W, padx=4, pady=1)
+            for col, stage in enumerate(STAGES, start=1):
+                key = (table.table.strip().upper(), stage)
+                if key in self.process_ids:
+                    initial = str(self.process_ids[key])
+                else:
+                    initial = str(getattr(defaults, "wk_process_id_" + stage.lower()))
+                var = tk.StringVar(value=initial)
+                ttk.Entry(inner, textvariable=var, width=14).grid(row=row, column=col, padx=4, pady=1)
+                fields[key] = var
+        buttons = ttk.Frame(wrapper)
+        buttons.grid(row=2, column=0, columnspan=2, sticky=tk.E, pady=(8, 0))
+
+        def on_ok():
+            self.process_ids = parse_process_ids({key: var.get() for key, var in fields.items()})
+            self.log("Process ID ворклетов: указано значений: {} (остальные — по умолчанию).".format(
+                len(self.process_ids)))
+            dialog.destroy()
+
+        ttk.Button(buttons, text="OK", command=on_ok).pack(side=tk.RIGHT)
+        dialog.geometry("520x420")
+        dialog.wait_window()
 
     def _on_click(self, event):
         item = self.tree.identify_row(event.y)
@@ -231,9 +292,9 @@ class App(tk.Tk):
         settings = GeneratorSettings(
             folder_name=self.folder_var.get().strip() or "MY_FOLDER_NAME",
             repository_name=self.repository_var.get().strip() or "REPOSITORY",
+            wk_process_id_map=self.process_ids or None,
         )
-        if not self.mappings_var.get() and not self.ddl_var.get() and not self.workflow_var.get() \
-                and not self.master_var.get():
+        if not self.mappings_var.get() and not self.ddl_var.get() and not self.workflow_var.get():
             messagebox.showwarning("Ничего не выбрано", "Отметьте хотя бы один тип генерации.")
             return
         written = generate_tables(
@@ -245,7 +306,7 @@ class App(tk.Tk):
             generate_mappings=self.mappings_var.get(),
             generate_ddl=self.ddl_var.get(),
             generate_workflow=self.workflow_var.get(),
-            generate_master=self.master_var.get(),
+            generate_master=self.workflow_var.get(),
         )
         if written:
             messagebox.showinfo("Готово", "Создано файлов: {}".format(len(written)))

@@ -15,6 +15,19 @@ def _section(stage_text: str, tag: str) -> str:
     return "\r\n".join(lines[start:end + 1])
 
 
+def _process_id(settings: GeneratorSettings, table: SourceTable, stage: str):
+    key = (table.table.strip().upper(), stage)
+    if settings.wk_process_id_map:
+        value = settings.wk_process_id_map.get(key)
+        if value:
+            return value
+    if stage == "SRC":
+        return settings.wk_process_id_src
+    if stage == "DLT":
+        return settings.wk_process_id_dlt
+    return settings.wk_process_id_tgt
+
+
 def generate_workflow_xml(
     table: SourceTable,
     settings: Optional[GeneratorSettings] = None,
@@ -47,9 +60,9 @@ def generate_workflow_xml(
         "@@SVC@@": settings.integration_service,
         "@@DOMAIN@@": settings.domain_name,
         "@@OWNER@@": settings.owner,
-        "@@PID_TGT@@": str(settings.wk_process_id_tgt),
-        "@@PID_DLT@@": str(settings.wk_process_id_dlt),
-        "@@PID_SRC@@": str(settings.wk_process_id_src),
+        "@@PID_TGT@@": str(_process_id(settings, table, "TGT")),
+        "@@PID_DLT@@": str(_process_id(settings, table, "DLT")),
+        "@@PID_SRC@@": str(_process_id(settings, table, "SRC")),
         "@@CREATION_DATE@@": settings.creation_date or datetime.datetime.now().strftime("%m/%d/%Y %H:%M:%S"),
         "@@FOLDER_NAME@@": settings.folder_name,
         "@@FOLDER_OWNER@@": settings.folder_owner,
