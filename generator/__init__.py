@@ -1,5 +1,6 @@
 from .ddl_generator import generate_ddl_for_table, generate_table_ddl
 from .loader import load_source_tables
+from .master_workflow_generator import generate_master_workflow_xml
 from .models import SourceAttribute, SourceTable
 from .settings import GeneratorSettings
 from .workflow_generator import generate_workflow_xml
@@ -17,6 +18,7 @@ __all__ = [
     "SourceTable",
     "generate_ddl_for_table",
     "generate_dlt_xml",
+    "generate_master_workflow_xml",
     "generate_src_xml",
     "generate_stage_xml",
     "generate_table_ddl",

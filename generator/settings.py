@@ -27,3 +27,9 @@ class GeneratorSettings:
     wk_process_id_src: int = 1000008927  # $$wk_PROCESS_ID в worklet SRC (DEFINE_VAR)
     wk_process_id_dlt: int = 1000008928  # $$wk_PROCESS_ID в worklet DLT (DEFINE_VAR)
     wk_process_id_tgt: int = 1000008929  # $$wk_PROCESS_ID в worklet TGT (DEFINE_VAR)
+    master_workflow_name: Optional[str] = None  # имя управляющего потока; None — wf_load_prm_ODS_<схема>
+    master_workflow_log_name: Optional[str] = None  # лог управляющего потока; None — <имя потока>.log
+    master_session_log_name: Optional[str] = None  # лог сессии статуса; None — s_DWH_LOAD_STATUS_ODS_<схема>.log
+    master_connection: str = "IAS_to_GO_Stage"  # подключение к БД в сессиях управляющего потока
+    pmcmd_user: str = "CABS_KIH"  # пользователь pmcmd при запуске рабочих потоков
+    pmcmd_password: str = "CABS_KIH"  # пароль pmcmd
