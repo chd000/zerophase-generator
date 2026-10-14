@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -21,18 +22,34 @@ def parse_process_ids(values):
 
 def generate_tables(excel_path, out_dir, settings, table_names=None, log=None,
                     generate_mappings=True, generate_ddl=True, generate_workflow=True,
-                    generate_master=True):
+                    generate_master=True, clean_output=False):
     log = log or (lambda message: None)
     tables = load_source_tables(excel_path)
     if not tables:
         log("В файле не найдено таблиц для генерации.")
         return []
+    targets = [t for t in tables if table_names is None or t.table in table_names]
+    if not targets:
+        log("Ни одна таблица не выбрана для генерации.")
+        return []
+    if clean_output:
+        cleaned = set()
+        for table in targets:
+            schema_dir = os.path.join(out_dir, table.schema or "UNKNOWN")
+            if schema_dir in cleaned:
+                continue
+            cleaned.add(schema_dir)
+            for sub in ("xml", "ddl"):
+                path = os.path.join(schema_dir, sub)
+                if os.path.isdir(path):
+                    try:
+                        shutil.rmtree(path)
+                    except Exception as exc:
+                        log("[ОШИБКА] Не удалось очистить {}: {}".format(path, exc))
+                        continue
+                    log("Очищено: {}".format(path))
     written = []
-    processed = []
-    for table in tables:
-        if table_names is not None and table.table not in table_names:
-            continue
-        processed.append(table)
+    for table in targets:
         xml_dir = os.path.join(out_dir, table.schema or "UNKNOWN", "xml")
         ddl_dir = os.path.join(out_dir, table.schema or "UNKNOWN", "ddl")
         if generate_mappings or generate_workflow:
@@ -79,10 +96,10 @@ def generate_tables(excel_path, out_dir, settings, table_names=None, log=None,
                 continue
             log("Создан: {}".format(wf_path))
             written.append(wf_path)
-    if generate_master and generate_workflow and processed:
+    if generate_master and generate_workflow and targets:
         schema_order = []
         by_schema = {}
-        for table in processed:
+        for table in targets:
             key = table.schema.strip().upper()
             if key not in by_schema:
                 by_schema[key] = []
@@ -122,6 +139,7 @@ class App(tk.Tk):
         self.mappings_var = tk.BooleanVar(value=True)
         self.ddl_var = tk.BooleanVar(value=True)
         self.workflow_var = tk.BooleanVar(value=True)
+        self.clean_var = tk.BooleanVar(value=False)
         container = ttk.Frame(self, padding=8)
         container.pack(fill=tk.BOTH, expand=True)
         files = ttk.LabelFrame(container, text="Файлы", padding=8)
@@ -162,6 +180,7 @@ class App(tk.Tk):
         ttk.Checkbutton(buttons, text="Маппинги (XML)", variable=self.mappings_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Checkbutton(buttons, text="DDL-скрипты", variable=self.ddl_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Checkbutton(buttons, text="Поток (workflow)", variable=self.workflow_var).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Checkbutton(buttons, text="Очищать каталоги вывода", variable=self.clean_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(buttons, text="Сгенерировать", command=self._generate).pack(side=tk.LEFT, padx=8)
         self.log_text = tk.Text(container, height=9, state=tk.DISABLED)
         self.log_text.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
@@ -297,6 +316,7 @@ class App(tk.Tk):
             generate_ddl=self.ddl_var.get(),
             generate_workflow=self.workflow_var.get(),
             generate_master=self.workflow_var.get(),
+            clean_output=self.clean_var.get(),
         )
         if written:
             messagebox.showinfo("Готово", "Создано файлов: {}".format(len(written)))
@@ -316,6 +336,8 @@ def main(argv=None):
     parser.add_argument("--no-ddl", action="store_true", help="не генерировать DDL-скрипты")
     parser.add_argument("--no-workflow", action="store_true", help="не генерировать поток (workflow)")
     parser.add_argument("--no-master", action="store_true", help="не генерировать управляющий поток")
+    parser.add_argument("--clean", action="store_true",
+                        help="очистить каталоги xml/ddl выбранных схем перед генерацией")
     args = parser.parse_args(argv)
     if not args.headless:
         App().mainloop()
@@ -336,6 +358,7 @@ def main(argv=None):
         generate_ddl=not args.no_ddl,
         generate_workflow=not args.no_workflow,
         generate_master=not args.no_master,
+        clean_output=args.clean,
     )
     return 0 if written else 1
 
