@@ -5,6 +5,7 @@ from typing import Iterable, List, Optional
 from .master_workflow_template import WORKFLOW_TEMPLATE
 from .models import SourceTable
 from .settings import GeneratorSettings
+from .workflow_generator import fill_tokens
 
 
 def _escape(value: str) -> str:
@@ -49,10 +50,4 @@ def generate_master_workflow_xml(
         "@@PMCMD_PASSWORD@@": settings.pmcmd_password,
         "@@TABLES@@": table_list,
     }
-    text = WORKFLOW_TEMPLATE
-    for token, value in values.items():
-        text = text.replace(token, value.replace("\r\n", "\n"))
-    if "@@" in text:
-        raise ValueError("В шаблоне управляющего потока остался незаполненный токен: {}".format(
-            text[text.index("@@"):text.index("@@") + 20]))
-    return text.replace("\n", "\r\n")
+    return fill_tokens(WORKFLOW_TEMPLATE, values, what="управляющего потока").replace("\n", "\r\n")

@@ -1,4 +1,5 @@
 import datetime
+import re
 import uuid
 from typing import List, Optional
 
@@ -6,6 +7,24 @@ from .models import SourceTable
 from .settings import GeneratorSettings
 from .xml_generator import generate_stage_xml
 from .workflow_template import WORKFLOW_TEMPLATE
+
+_TOKEN_RE = re.compile(r"@@([A-Z_]+)@@")
+
+
+def fill_tokens(template: str, values: dict, what: str = "потока") -> str:
+    def substitute(match):
+        token = match.group(0)
+        try:
+            value = values[token]
+        except KeyError:
+            raise ValueError("В шаблоне {} нет значения для токена: {}".format(what, token))
+        return value.replace("\r\n", "\n")
+
+    text = _TOKEN_RE.sub(substitute, template)
+    if "@@" in text:
+        raise ValueError("В шаблоне {} остался незаполненный токен: {}".format(
+            what, text[text.index("@@"):text.index("@@") + 20]))
+    return text
 
 
 def _section(stage_text: str, tag: str) -> str:
@@ -81,10 +100,4 @@ def generate_workflow_xml(
         "@@FOLDER_UUID@@": settings.folder_uuid or str(uuid.uuid4()),
         "@@REPOSITORY@@": settings.repository_name,
     }
-    text = WORKFLOW_TEMPLATE
-    for token, value in values.items():
-        text = text.replace(token, value.replace("\r\n", "\n"))
-    if "@@" in text:
-        raise ValueError("В шаблоне потока остался незаполненный токен: {}".format(
-            text[text.index("@@"):text.index("@@") + 20]))
-    return text.replace("\n", "\r\n")
+    return fill_tokens(WORKFLOW_TEMPLATE, values).replace("\n", "\r\n")

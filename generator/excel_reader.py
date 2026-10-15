@@ -7,15 +7,17 @@ NS_MAIN = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 NS_REL = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 
 
+_COL_RE = re.compile(r"([A-Z]+)")
+
+
 def _column_of(cell_ref: str) -> str:
-    match = re.match(r"([A-Z]+)", (cell_ref or "").upper())
+    match = _COL_RE.match((cell_ref or "").upper())
     return match.group(1) if match else ""
 
 
-def _sheet_targets(xlsx_path: str) -> dict:
-    with zipfile.ZipFile(xlsx_path) as archive:
-        workbook = ET.fromstring(archive.read("xl/workbook.xml"))
-        relations = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+def _sheet_targets(archive) -> dict:
+    workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+    relations = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
     targets = {rel.get("Id"): rel.get("Target") or "" for rel in relations}
     sheet_map = {}
     for sheet in workbook.iter(NS_MAIN + "sheet"):
@@ -41,18 +43,12 @@ def _shared_strings(archive) -> List[str]:
 
 
 def sheet_names(xlsx_path: str) -> List[str]:
-    return list(_sheet_targets(xlsx_path))
-
-
-def read_sheet(xlsx_path: str, sheet_name: str) -> List[dict]:
-    sheet_map = _sheet_targets(xlsx_path)
-    if sheet_name not in sheet_map:
-        raise KeyError(
-            "Лист {!r} не найден. Доступные листы: {}".format(sheet_name, ", ".join(sheet_map))
-        )
     with zipfile.ZipFile(xlsx_path) as archive:
-        shared = _shared_strings(archive)
-        root = ET.fromstring(archive.read(sheet_map[sheet_name]))
+        return list(_sheet_targets(archive))
+
+
+def _parse_sheet(data: bytes, shared: List[str]) -> List[dict]:
+    root = ET.fromstring(data)
     rows = []
     for row in root.iter(NS_MAIN + "row"):
         cells = {}
@@ -76,3 +72,19 @@ def read_sheet(xlsx_path: str, sheet_name: str) -> List[dict]:
                 cells[column] = value
         rows.append(cells)
     return rows
+
+
+def read_sheets(xlsx_path: str, wanted: List[str]) -> dict:
+    with zipfile.ZipFile(xlsx_path) as archive:
+        sheet_map = _sheet_targets(archive)
+        for name in wanted:
+            if name not in sheet_map:
+                raise KeyError(
+                    "Лист {!r} не найден. Доступные листы: {}".format(name, ", ".join(sheet_map))
+                )
+        shared = _shared_strings(archive)
+        return {name: _parse_sheet(archive.read(sheet_map[name]), shared) for name in wanted}
+
+
+def read_sheet(xlsx_path: str, sheet_name: str) -> List[dict]:
+    return read_sheets(xlsx_path, [sheet_name])[sheet_name]

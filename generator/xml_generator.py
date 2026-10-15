@@ -655,27 +655,3 @@ def generate_stage_xml(
     lines.append("</REPOSITORY>")
     lines.append("</POWERMART>")
     return "\r\n".join(lines)
-
-
-def generate_src_xml(
-    table: SourceTable,
-    settings: Optional[GeneratorSettings] = None,
-    warnings: Optional[List[str]] = None,
-) -> str:
-    return generate_stage_xml(table, "SRC", settings, warnings)
-
-
-def generate_dlt_xml(
-    table: SourceTable,
-    settings: Optional[GeneratorSettings] = None,
-    warnings: Optional[List[str]] = None,
-) -> str:
-    return generate_stage_xml(table, "DLT", settings, warnings)
-
-
-def generate_tgt_xml(
-    table: SourceTable,
-    settings: Optional[GeneratorSettings] = None,
-    warnings: Optional[List[str]] = None,
-) -> str:
-    return generate_stage_xml(table, "TGT", settings, warnings)

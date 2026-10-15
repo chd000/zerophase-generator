@@ -1,7 +1,7 @@
 import re
 from typing import List
 
-from .excel_reader import read_sheet
+from .excel_reader import read_sheets
 from .models import SourceAttribute, SourceTable
 
 SHEET_TABLES = "Таблицы источника"
@@ -36,8 +36,9 @@ def _text(cells: dict, headers: dict, title: str) -> str:
 
 
 def load_source_tables(xlsx_path: str) -> List[SourceTable]:
-    table_rows = read_sheet(xlsx_path, SHEET_TABLES)
-    attribute_rows = read_sheet(xlsx_path, SHEET_ATTRIBUTES)
+    sheets = read_sheets(xlsx_path, [SHEET_TABLES, SHEET_ATTRIBUTES])
+    table_rows = sheets[SHEET_TABLES]
+    attribute_rows = sheets[SHEET_ATTRIBUTES]
     table_headers = _header_columns(table_rows, [0])
     tables = []
     for cells in table_rows[1:]:
