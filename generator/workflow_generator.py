@@ -41,6 +41,8 @@ def generate_workflow_xml(
     base = table.base_name
     stem_body = base[4:] if base.startswith("ODS_") else base
     stem = "ODS_" + stem_body
+    ddl_base = table.src_name
+    wk_stem = ddl_base[:-4] if ddl_base.upper().endswith("_SRC") else ddl_base
     workflow_name = settings.workflow_name or "wf_" + stem
     workflow_log_name = settings.workflow_log_name or ("wf_" + stem)
     values = {
@@ -53,6 +55,7 @@ def generate_workflow_xml(
         "@@TGT_DEF_SRC@@": _section(stage_texts["SRC"], "TARGET"),
         "@@MAPPING_SRC@@": _section(stage_texts["SRC"], "MAPPING"),
         "@@STEM@@": stem_body,
+        "@@WK_STEM@@": wk_stem,
         "@@WF_NAME@@": workflow_name,
         "@@WF_LOG@@": workflow_log_name,
         "@@MAP_SRC@@": table.mapping_name_for("SRC"),
