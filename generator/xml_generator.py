@@ -47,7 +47,7 @@ GATHER_STATS_SQL = (
 
 TGT_SOURCE_FILTER = "DWH$CHANGE_TYPE IN ('I', 'U', 'D')"
 
-_FIELD_RENAMES = {"DATE": "DTE", "TYPE": "TPE", "NUMBER": "NMBR"}
+_FIELD_RENAMES = {"DATE": "DTE", "TYPE": "TPE", "NUMBER": "NMBR", "INDEX": "INDX"}
 
 
 def _xml_field_name(name: str) -> str:

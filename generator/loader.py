@@ -31,6 +31,13 @@ def _identifier(cells: dict, headers: dict, title: str) -> str:
     return _WS_RE.sub("", _cell(cells, headers, title))
 
 
+def _unquoted(text: str) -> str:
+    text = text.strip()
+    if len(text) >= 2 and text[0] == '"' and text[-1] == '"':
+        text = text[1:-1].strip()
+    return text
+
+
 def _text(cells: dict, headers: dict, title: str) -> str:
     return _WS_RE.sub(" ", _cell(cells, headers, title)).strip()
 
@@ -58,7 +65,7 @@ def load_source_tables(xlsx_path: str) -> List[SourceTable]:
     attribute_headers = _header_columns(attribute_rows, [0, 1])
     by_key = {(t.schema.upper(), t.table.upper()): t for t in tables}
     for cells in attribute_rows[2:]:
-        name = _identifier(cells, attribute_headers, "Атрибут источника")
+        name = _unquoted(_identifier(cells, attribute_headers, "Атрибут источника"))
         if not name:
             continue
         key = (
