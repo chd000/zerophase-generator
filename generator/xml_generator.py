@@ -150,10 +150,9 @@ def _field_spec(datatype, precision, scale):
             }
         return {
             "datatype": "number",
-            "phys": prec,
-            "prec": prec,
-            "scale": scale_value,
-            "explicit": precision is not None,
+            "phys": 15,
+            "prec": 15,
+            "scale": 0,
         }
     if datatype == "date":
         return {"datatype": "date", "phys": 19, "prec": 19, "scale": 0}
