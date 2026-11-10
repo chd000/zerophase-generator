@@ -4,7 +4,7 @@ import re
 import uuid
 from typing import List, Optional
 
-from .models import SourceTable
+from .models import SourceAttribute, SourceTable
 from .settings import GeneratorSettings
 
 _TYPE_RE = re.compile(
@@ -39,6 +39,8 @@ TECH_FIELD_SPECS = [
     ("ODS$PROCESSED_DT", "date", None, None),
     ("ODS$OP_TYPE", "varchar2", 50, 0),
 ]
+
+_TECH_FIELD_NAMES = frozenset(name for name, _, _, _ in TECH_FIELD_SPECS)
 
 GATHER_STATS_SQL = (
     "begin dbms_stats.gather_table_stats (ownname=>'{owner}',tabname=>'{tabname}'{cascade_sep}TRUE, "
@@ -183,6 +185,14 @@ def _attr_plain(pairs) -> str:
     return " ".join('{}="{}"'.format(name, _escape_attr(value)) for name, value in pairs)
 
 
+def _business_attributes(table: SourceTable) -> List[SourceAttribute]:
+    return [
+        attribute
+        for attribute in table.attributes
+        if _xml_field_name(attribute.name) not in _TECH_FIELD_NAMES
+    ]
+
+
 def _build_fields(table: SourceTable) -> List[dict]:
     fields = []
     for name, datatype, precision, scale in TECH_FIELD_SPECS:
@@ -190,7 +200,7 @@ def _build_fields(table: SourceTable) -> List[dict]:
         spec["name"] = name
         spec["description"] = ""
         fields.append(spec)
-    for attribute in table.attributes:
+    for attribute in _business_attributes(table):
         base, precision, scale = parse_data_type(attribute.data_type)
         spec = _field_spec(base, precision, scale)
         spec["name"] = _xml_field_name(attribute.name)
@@ -230,7 +240,7 @@ def _pk_columns(table: SourceTable, warnings: List[str]) -> List[str]:
 
 
 def _sql_query(table: SourceTable, warnings: List[str]) -> str:
-    business = [_sql_field_name(a.name) for a in table.attributes]
+    business = [_sql_field_name(a.name) for a in _business_attributes(table)]
     outer = [
         "DWH$CHANGE_DATE",
         "DWH$CHANGE_TYPE",
@@ -263,7 +273,7 @@ def _sql_query(table: SourceTable, warnings: List[str]) -> str:
 
 
 def _sql_query_dlt(table: SourceTable, settings: GeneratorSettings, warnings: List[str]) -> str:
-    business = [_xml_field_name(a.name) for a in table.attributes]
+    business = [_xml_field_name(a.name) for a in _business_attributes(table)]
     pk = [_xml_field_name(name) for name in _pk_columns(table, warnings)]
     if not pk:
         raise ValueError("Для DLT-маппинга необходимы PK-атрибуты")
