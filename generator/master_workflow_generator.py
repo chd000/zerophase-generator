@@ -23,7 +23,7 @@ def generate_master_workflow_xml(
     tables = list(tables)
     if not tables:
         raise ValueError("Список таблиц для управляющего потока пуст.")
-    names = [table.base_name[4:] if table.base_name.startswith("ODS_") else table.base_name
+    names = [table.workflow_stem[4:] if table.workflow_stem.startswith("ODS_") else table.workflow_stem
              for table in tables]
     if any(not name.strip("_") for name in names):
         raise ValueError("У таблиц не заполнено имя для управляющего потока.")

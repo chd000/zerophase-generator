@@ -28,7 +28,7 @@ class GeneratorSettings:
 
     folder_uuid: Optional[str] = None  # UUID папки; None — новый для каждого XML-файла
     creation_date: Optional[str] = None  # дата в заголовке (MM/DD/YYYY HH:MI:SS); None — текущая
-    workflow_name: Optional[str] = None  # имя потока; None — wf_ODS_<схема>_<таблица>
+    workflow_name: Optional[str] = None  # имя потока; None — wf_ODS_<схема>_<таблица> (в новом формате — с постфиксом команды)
     workflow_log_name: Optional[str] = None  # базовое имя лога потока; None — как имя потока
     master_workflow_name: Optional[str] = None  # имя управляющего потока; None — wf_load_prm_ODS_<схема>
     master_workflow_log_name: Optional[str] = None  # лог управляющего потока; None — <имя потока>.log

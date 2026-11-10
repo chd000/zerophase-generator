@@ -39,6 +39,13 @@ class SourceTable:
         return "ODS_{}_{}".format(self.schema.strip(), self.table.strip()).upper()
 
     @property
+    def workflow_stem(self) -> str:
+        if self.inc_table.strip().upper().endswith("_SRC"):
+            src = self.src_name.strip()
+            return src[:-4] if src.upper().endswith("_SRC") else src
+        return self.base_name
+
+    @property
     def dlt_name(self) -> str:
         src = self.src_name
         if src.upper().endswith("_SRC"):

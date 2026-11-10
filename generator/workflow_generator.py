@@ -59,11 +59,11 @@ def generate_workflow_xml(
         stage_texts[stage] = generate_stage_xml(table, stage, settings, warnings=stage_warnings)
     base = table.base_name
     stem_body = base[4:] if base.startswith("ODS_") else base
-    stem = "ODS_" + stem_body
     ddl_base = table.src_name
     wk_stem = ddl_base[:-4] if ddl_base.upper().endswith("_SRC") else ddl_base
-    workflow_name = settings.workflow_name or "wf_" + stem
-    workflow_log_name = settings.workflow_log_name or ("wf_" + stem)
+    workflow_stem = table.workflow_stem
+    workflow_name = settings.workflow_name or "wf_" + workflow_stem
+    workflow_log_name = settings.workflow_log_name or ("wf_" + workflow_stem)
     values = {
         "@@SRC_DEF_DLT@@": _section(stage_texts["TGT"], "SOURCE"),
         "@@TGT_DEF_TGT@@": _section(stage_texts["TGT"], "TARGET"),
