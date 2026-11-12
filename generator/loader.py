@@ -136,12 +136,14 @@ def _attribute_columns(headers: dict) -> dict:
 
 def load_source_tables(xlsx_path: str) -> List[SourceTable]:
     sheets = read_sheets(xlsx_path, [SHEET_TABLES, SHEET_ATTRIBUTES])
-    table_rows = sheets[SHEET_TABLES]
-    attribute_rows = sheets[SHEET_ATTRIBUTES]
+    table_rows, table_red = sheets[SHEET_TABLES]
+    attribute_rows, attribute_red = sheets[SHEET_ATTRIBUTES]
     table_headers, table_start = _split_header(table_rows, _TABLE_TITLES, allow_stage=True)
     table_cols = _table_columns(table_headers)
     tables = []
-    for cells in table_rows[table_start:]:
+    for index, cells in enumerate(table_rows[table_start:], start=table_start):
+        if table_red[index]:
+            continue
         table = SourceTable(
             system=_text(cells, table_cols["system"]),
             db=_identifier(cells, table_cols["db"]),
@@ -158,14 +160,19 @@ def load_source_tables(xlsx_path: str) -> List[SourceTable]:
     attribute_headers, attribute_start = _split_header(attribute_rows, _ATTRIBUTE_TITLES)
     attribute_cols = _attribute_columns(attribute_headers)
     by_key = {(t.schema.upper(), t.table.upper()): t for t in tables}
-    for cells in attribute_rows[attribute_start:]:
-        name = _unquoted(_identifier(cells, attribute_cols["name"]))
-        if not name:
-            continue
+    red_attribute_keys = set()
+    for index, cells in enumerate(attribute_rows[attribute_start:], start=attribute_start):
         key = (
             _identifier(cells, attribute_cols["schema"]).upper(),
             _identifier(cells, attribute_cols["table"]).upper(),
         )
+        if attribute_red[index]:
+            if any(key):
+                red_attribute_keys.add(key)
+            continue
+        name = _unquoted(_identifier(cells, attribute_cols["name"]))
+        if not name:
+            continue
         table = by_key.get(key)
         if table is None:
             continue
@@ -178,4 +185,8 @@ def load_source_tables(xlsx_path: str) -> List[SourceTable]:
                 pk=_cell(cells, attribute_cols["pk"]).upper() == "Y",
             )
         )
-    return tables
+    return [
+        table for table in tables
+        if table.attributes
+        or (table.schema.upper(), table.table.upper()) not in red_attribute_keys
+    ]

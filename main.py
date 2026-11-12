@@ -11,13 +11,19 @@ from generator import (GeneratorSettings, generate_ddl_for_table, generate_maste
 
 STAGES = ("SRC", "DLT", "TGT")
 
+_NAV_KEYS = ("Left", "Right", "Up", "Down", "Home", "End", "Prior", "Next",
+             "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R",
+             "Meta_L", "Meta_R")
 
-def parse_process_ids(values):
+
+def build_process_ids(starts):
     parsed = {}
-    for key, text in values.items():
-        text = (text or "").strip()
+    for table, value in starts.items():
+        text = str("" if value is None else value).strip()
         if text.isdigit():
-            parsed[key] = int(text)
+            base = int(text)
+            for offset, stage in enumerate(STAGES):
+                parsed[(table, stage)] = base + offset
     return parsed
 
 
@@ -165,6 +171,7 @@ class App(tk.Tk):
         self.tables = []
         self.checked = set()
         self.process_ids = {}
+        self.process_starts = {}
         self.mappings_var = tk.BooleanVar(value=True)
         self.ddl_var = tk.BooleanVar(value=True)
         self.workflow_var = tk.BooleanVar(value=True)
@@ -211,14 +218,42 @@ class App(tk.Tk):
         ttk.Checkbutton(buttons, text="Поток (workflow)", variable=self.workflow_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Checkbutton(buttons, text="Очищать папки схем перед генерацией", variable=self.clean_var).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(buttons, text="Сгенерировать", command=self._generate).pack(side=tk.LEFT, padx=8)
-        self.log_text = tk.Text(container, height=9, state=tk.DISABLED)
+        self.log_text = tk.Text(container, height=9, wrap="word")
         self.log_text.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
+        self.log_text.bind("<Key>", self._block_log_edit)
+        for sequence in ("<Control-c>", "<Command-c>", "<Control-Insert>"):
+            self.log_text.bind(sequence, self._copy_log)
+        self.log_text.bind("<Control-a>", self._select_all_log)
+        self.log_menu = tk.Menu(self.log_text, tearoff=0)
+        self.log_menu.add_command(label="Копировать", command=self._copy_log)
+        self.log_menu.add_command(label="Выделить всё", command=self._select_all_log)
+        self.log_text.bind("<Button-3>", self._show_log_menu)
 
     def log(self, message):
-        self.log_text.configure(state=tk.NORMAL)
         self.log_text.insert(tk.END, message + "\n")
         self.log_text.see(tk.END)
-        self.log_text.configure(state=tk.DISABLED)
+
+    def _block_log_edit(self, event):
+        if event.keysym in _NAV_KEYS:
+            return None
+        return "break"
+
+    def _copy_log(self, event=None):
+        try:
+            text = self.log_text.get(tk.SEL_FIRST, tk.SEL_LAST)
+        except tk.TclError:
+            return "break"
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        return "break"
+
+    def _select_all_log(self, event=None):
+        self.log_text.tag_add("sel", "1.0", "end-1c")
+        return "break"
+
+    def _show_log_menu(self, event):
+        self.log_menu.tk_popup(event.x_root, event.y_root)
+        return "break"
 
     def _choose_excel(self):
         path = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx"), ("Все файлы", "*.*")])
@@ -244,6 +279,7 @@ class App(tk.Tk):
         self.checked = {t.table for t in self.tables}
         known = {t.table.strip().upper() for t in self.tables}
         self.process_ids = {k: v for k, v in self.process_ids.items() if k[0] in known}
+        self.process_starts = {k: v for k, v in self.process_starts.items() if k in known}
         self.tree.delete(*self.tree.get_children())
         for t in self.tables:
             self.tree.insert(
@@ -265,9 +301,10 @@ class App(tk.Tk):
         wrapper.pack(fill=tk.BOTH, expand=True)
         defaults = GeneratorSettings()
         ttk.Label(wrapper, text=(
-            "Таблиц: {}. Для каждой таблицы задайте $$wk_PROCESS_ID её ворклетов (SRC, DLT, TGT).\n"
-            "Поля предзаполнены значениями по умолчанию (заглушка) — измените при необходимости."
-        ).format(len(self.tables))).grid(row=0, column=0, columnspan=4, sticky=tk.W, pady=(0, 6))
+            "Таблиц: {}. Для каждой таблицы укажите начальный $$wk_PROCESS_ID — он достанется ворклету SRC,\n"
+            "DLT и TGT получат следующие два значения (например, 100 → SRC 100, DLT 101, TGT 102).\n"
+            "Пусто или не число — для таблицы берутся значения по умолчанию (заглушка)."
+        ).format(len(self.tables))).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 6))
         canvas = tk.Canvas(wrapper, highlightthickness=0)
         vsb = ttk.Scrollbar(wrapper, orient=tk.VERTICAL, command=canvas.yview)
         inner = ttk.Frame(canvas)
@@ -278,32 +315,36 @@ class App(tk.Tk):
         vsb.grid(row=1, column=1, sticky=tk.NS)
         wrapper.rowconfigure(1, weight=1)
         wrapper.columnconfigure(0, weight=1)
-        for col, title in enumerate(("Таблица (схема)", "SRC", "DLT", "TGT")):
+        for col, title in enumerate(("Таблица (схема)", "Начальный ID (SRC)")):
             ttk.Label(inner, text=title).grid(row=0, column=col, sticky=tk.W, padx=4, pady=(0, 4))
         fields = {}
         for row, table in enumerate(self.tables, start=1):
+            key = table.table.strip().upper()
+            if key in self.process_starts:
+                initial = str(self.process_starts[key])
+            else:
+                initial = str(defaults.wk_process_id_src)
             ttk.Label(inner, text="{} ({})".format(table.table, table.schema)).grid(
                 row=row, column=0, sticky=tk.W, padx=4, pady=1)
-            for col, stage in enumerate(STAGES, start=1):
-                key = (table.table.strip().upper(), stage)
-                if key in self.process_ids:
-                    initial = str(self.process_ids[key])
-                else:
-                    initial = str(getattr(defaults, "wk_process_id_" + stage.lower()))
-                var = tk.StringVar(value=initial)
-                ttk.Entry(inner, textvariable=var, width=14).grid(row=row, column=col, padx=4, pady=1)
-                fields[key] = var
+            var = tk.StringVar(value=initial)
+            ttk.Entry(inner, textvariable=var, width=14).grid(row=row, column=1, padx=4, pady=1)
+            fields[key] = var
         buttons = ttk.Frame(wrapper)
         buttons.grid(row=2, column=0, columnspan=2, sticky=tk.E, pady=(8, 0))
 
         def on_ok():
-            self.process_ids = parse_process_ids({key: var.get() for key, var in fields.items()})
-            self.log("Process ID ворклетов: указано значений: {} (остальные — по умолчанию).".format(
-                len(self.process_ids)))
+            self.process_starts = {
+                key: int(var.get().strip()) for key, var in fields.items()
+                if var.get().strip().isdigit()
+            }
+            self.process_ids = build_process_ids(self.process_starts)
+            self.log(
+                "Process ID ворклетов: задано таблиц: {} (SRC = n, DLT = n+1, TGT = n+2; "
+                "остальные — по умолчанию).".format(len(self.process_starts)))
             dialog.destroy()
 
         ttk.Button(buttons, text="OK", command=on_ok).pack(side=tk.RIGHT)
-        dialog.geometry("520x420")
+        dialog.geometry("420x420")
         dialog.wait_window()
 
     def _on_click(self, event):
